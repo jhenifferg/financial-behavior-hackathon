@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.venv/
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data — não versionar arquivos grandes
+data/raw/*.csv
+data/raw/*.xlsx
+data/processed/*.csv
+
+# Power BI temporários
+~$*.pbix
+*.pbix.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
