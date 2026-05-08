@@ -44,7 +44,7 @@
 │  ─────────┼─────────────────────────────────────────────────────── │
 │           │             VISUALIZAÇÃO                                │
 │           ▼                                                         │
-│  [Power BI — Painel da Diretoria]                                   │
+│  [Power BI — Painel]                                   │
 │   Consome: transactions_clean.csv + user_predictions.csv           │
 │   Exibe: KPIs, saldo mensal, categorias, score de perfil           │
 └─────────────────────────────────────────────────────────────────────┘
@@ -63,7 +63,7 @@
 - Leitura do CSV bruto
 - Conversão de tipos (Date → datetime)
 - Padronização de `Account Name`
-- Estatísticas descritivas (distribuições, outliers, sazonalidade)
+- Estatísticas descritivas 
 - Geração de `transactions_clean.csv`
 
 ### 3. SQL (`notebooks/02_sql_queries.ipynb`)
@@ -77,12 +77,21 @@
 - Saída: `user_features.csv`
 
 ### 5. Modelo de ML (`notebooks/04_ml_model.ipynb`)
-- **Algoritmo:** Random Forest Classifier
-- **Target:** Perfil financeiro (saver / debtor / balanced)
-- **Avaliação:** Acurácia, F1-Score, Confusion Matrix, Cross-Validation
-- **Interpretabilidade:** Feature Importance
+Pipeline em dois estágios:
 
-### 6. Dashboard Power BI (`powerbi/painel_diretoria.pbix`)
+**Etapa 1 — Clustering (K-Means, não supervisionado)**
+- **Objetivo:** Descobrir perfis financeiros naturais nos dados, sem rótulos pré-definidos
+- **Features:** `savings_rate`, `pct_meses_negativo`, `has_investment`, `spending_volatility`, `avg_perc_gasto_credito`, `avg_monthly_debit`
+- **Pré-processamento:** `StandardScaler` (K-Means é sensível a escala)
+- **Escolha do k:** Elbow Method + Silhouette Score → k=3
+
+**Etapa 2 — Classificador (Random Forest, supervisionado)**
+- **Objetivo:** Generalizar os perfis descobertos para classificar novos usuários automaticamente
+- **Target:** Labels gerados pelo K-Means (3 classes)
+- **Features:** 12 features comportamentais do `user_features.csv`
+- **Output:** `data/processed/user_predictions.csv` com perfil previsto + probabilidade por classe (consumido pelo Power BI)
+
+### 6. Dashboard Power BI (`powerbi/painel.pbix`)
 - **Fontes:** `transactions_clean.csv` + `user_predictions.csv`
 - **Páginas:** Visão Geral, Saúde Financeira, Comportamento de Gasto, Predição ML
 
@@ -104,7 +113,7 @@ jupyter notebook notebooks/03_feature_engineering.ipynb
 jupyter notebook notebooks/04_ml_model.ipynb
 
 # 4. Abrir dashboard
-# Abrir powerbi/painel_diretoria.pbix no Power BI Desktop
+# Abrir powerbi/painel.pbix no Power BI Desktop
 # Atualizar fonte de dados para data/processed/
 ```
 

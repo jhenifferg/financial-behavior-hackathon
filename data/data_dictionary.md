@@ -51,7 +51,7 @@ Gerado por `src/data_generator.py` a partir do dataset original. Este é o arqui
 |---|---|---|---|
 | `User_ID` | string | Identificador único do usuário, atribuído pelo script de geração | `USER_0001` |
 
-> **O que o script faz:** replica e distribui as transações entre múltiplos usuários, gerando 51 perfis distintos (`USER_0001` a `USER_0051`). Isso permite análise comparativa de comportamento financeiro — núcleo analítico do projeto.
+> **O que o script faz:** replica e distribui as transações entre múltiplos usuários, gerando 51 perfis distintos (`USER_0001` a `USER_0051`). Isso permite análise comparativa de comportamento financeiro.
 
 ---
 

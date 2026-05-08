@@ -8,24 +8,26 @@ Descrição:
     múltiplos usuários, adicionando a coluna User_ID para
     permitir análise comparativa de comportamento financeiro.
 
+    O dataset original recebe o ID USER_0051.
+    Os 50 usuários sintéticos recebem USER_0001 a USER_0050.
+    Total: 51 usuários.
+
 Uso:
     python src/data_generator.py
 
 Saída:
     data/raw/personal_transactions_padronizado_v2.csv
-
-ADD: Inserir implementação aqui.
 """
 
 import pandas as pd
 import numpy as np
 from faker import Faker
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 import os
 import sys
 
-fake = Faker("en_US")   # mesmo locale do dataset original (inglês)
+fake = Faker("en_US")
 np.random.seed(42)
 random.seed(42)
 
@@ -37,7 +39,6 @@ INPUT_FILE  = "personal_transactions.csv"
 OUTPUT_FILE = "personal_transactions_padronizado_v2.csv"
 
 N_NOVOS_USUARIOS = 50      # usuários sintéticos a adicionar
-MESES_POR_USUARIO = 24     # Jan 2023 → Dez 2024  (expande o período do dataset)
 
 # ─────────────────────────────────────────────
 # PASSO 1 — LEITURA E DIAGNÓSTICO DO DATASET ORIGINAL
@@ -63,20 +64,16 @@ print(f"\n    Categorias originais ({df_original['Category'].nunique()} únicas)
 for cat in sorted(df_original["Category"].unique()):
     print(f"      - {cat}")
 
-# Contas únicas no dataset (Account Name)
 contas_originais = df_original["Account Name"].unique().tolist()
 print(f"\n    Account Names: {contas_originais}")
 
 # ─────────────────────────────────────────────
-# PASSO 2 — NOVAS CATEGORIAS
-# Mantemos TODAS as originais + adicionamos novas
-# relevantes para análise de comportamento financeiro
+# PASSO 2 — DEFINIÇÃO DE CATEGORIAS
 # ─────────────────────────────────────────────
 
-# Formato: "Categoria" : (transaction_type, valor_medio, desvio, account_name)
-# transaction_type: "debit" ou "credit"
-CATEGORIAS_NOVAS = {
-    # --- Já existentes no Kaggle (mantidas para os novos usuários) ---
+# Formato: "Categoria": (transaction_type, valor_medio, desvio, account_name)
+CATEGORIAS = {
+    # Originais do Kaggle
     "Groceries"          : ("debit",   320,  80,  "checking"),
     "Restaurants"        : ("debit",   180,  70,  "credit card"),
     "Gas & Fuel"         : ("debit",   150,  50,  "credit card"),
@@ -88,243 +85,171 @@ CATEGORIAS_NOVAS = {
     "Rent"               : ("debit",  1500, 300,  "checking"),
     "Insurance"          : ("debit",   250,  50,  "checking"),
     "Paycheck"           : ("credit", 4000, 800,  "checking"),
-
-    # --- NOVAS categorias para enriquecer a análise ---
-    # Educação & Desenvolvimento
+    # Educação
     "Education"          : ("debit",   350, 150,  "checking"),
     "Online Courses"     : ("debit",    80,  40,  "credit card"),
     "Books & Supplies"   : ("debit",    50,  30,  "credit card"),
-
-    # Serviços Digitais / Assinaturas
+    # Serviços digitais
     "Streaming Services" : ("debit",    45,  15,  "credit card"),
     "Software & Apps"    : ("debit",    35,  20,  "credit card"),
     "Phone Bill"         : ("debit",    85,  20,  "checking"),
     "Internet Bill"      : ("debit",    70,  15,  "checking"),
-
     # Saúde
     "Pharmacy"           : ("debit",    60,  40,  "credit card"),
     "Doctor & Dentist"   : ("debit",   150,  80,  "credit card"),
     "Mental Health"      : ("debit",   120,  50,  "credit card"),
-
-    # Finanças Pessoais
-    "Savings Transfer"   : ("debit",   500, 200,  "checking"),   # dinheiro para poupança
-    "Investment"         : ("debit",   400, 200,  "checking"),   # aportes em investimentos
-    "Credit Card Payment": ("debit",   800, 300,  "checking"),   # pagamento da fatura
-    "Loan Payment"       : ("debit",   600, 150,  "checking"),   # parcela de empréstimo
-
-    # Cuidados Pessoais & Casa
+    # Finanças pessoais
+    "Savings Transfer"   : ("debit",   500, 200,  "checking"),
+    "Investment"         : ("debit",   400, 200,  "checking"),
+    "Credit Card Payment": ("debit",   800, 300,  "checking"),
+    "Loan Payment"       : ("debit",   600, 150,  "checking"),
+    # Casa e pessoal
     "Personal Care"      : ("debit",    80,  40,  "credit card"),
     "Home Improvement"   : ("debit",   200, 150,  "credit card"),
     "Pet Care"           : ("debit",    90,  50,  "credit card"),
-
-    # Transporte Alternativo
-    "Rideshare"          : ("debit",    60,  30,  "credit card"),  # Uber/Lyft
+    # Transporte
+    "Rideshare"          : ("debit",    60,  30,  "credit card"),
     "Public Transit"     : ("debit",    40,  20,  "checking"),
-
     # Outros
     "Charity & Donations": ("debit",    50,  30,  "checking"),
     "Gifts"              : ("debit",    80,  60,  "credit card"),
     "Taxes"              : ("debit",   400, 200,  "checking"),
-    "Freelance Income"   : ("credit",  600, 400,  "checking"),   # renda extra
-    "Bonus"              : ("credit",  800, 500,  "checking"),   # bônus/13º
+    "Freelance Income"   : ("credit",  600, 400,  "checking"),
+    "Bonus"              : ("credit",  800, 500,  "checking"),
 }
 
-print(f"\n[2] Novas categorias adicionadas: {len(CATEGORIAS_NOVAS)}")
+print(f"\n[2] Categorias disponíveis: {len(CATEGORIAS)}")
 
 # ─────────────────────────────────────────────
-# PASSO 3 — PERFIS DE USUÁRIO
-# Cada perfil define quais categorias aparecem com frequência
-# e qual o multiplicador de gasto (1.0 = normal)
+# PASSO 3 — CATEGORIAS ESSENCIAIS (todo usuário tem)
 # ─────────────────────────────────────────────
 
-PERFIS = {
-    "saver": {
-        "income_mult"      : 1.30,   # renda 30% acima da média
-        "spend_mult"       : 0.60,   # gasta 60% da renda
-        "has_investment"   : True,
-        "has_loan"         : False,
-        "extras"           : ["Investment", "Savings Transfer", "Online Courses"],
-    },
-    "balanced": {
-        "income_mult"      : 1.00,
-        "spend_mult"       : 0.88,
-        "has_investment"   : False,
-        "has_loan"         : False,
-        "extras"           : ["Streaming Services", "Personal Care"],
-    },
-    "debtor": {
-        "income_mult"      : 0.75,   # renda abaixo da média
-        "spend_mult"       : 1.15,   # gasta mais do que ganha
-        "has_investment"   : False,
-        "has_loan"         : True,
-        "extras"           : ["Loan Payment", "Credit Card Payment", "Rideshare"],
-    },
-}
-
-# Categorias base que todo usuário tem (despesas essenciais)
 CATS_ESSENCIAIS = [
-    "Groceries", "Utilities", "Rent", "Phone Bill",
-    "Internet Bill", "Gas & Fuel", "Insurance",
+    "Groceries",
+    "Utilities",
+    "Rent",
+    "Phone Bill",
+    "Internet Bill",
+    "Gas & Fuel",
+    "Insurance",
 ]
 
 # ─────────────────────────────────────────────
-# PASSO 4 — GERAÇÃO DE NOVOS REGISTROS
+# PASSO 4 — GERAÇÃO DE NOVOS USUÁRIOS
 # ─────────────────────────────────────────────
 
-print(f"\n[3] Gerando {N_NOVOS_USUARIOS} novos usuários "
-      f"({MESES_POR_USUARIO} meses cada)...")
+print(f"\n[3] Gerando {N_NOVOS_USUARIOS} novos usuários...")
 
-DATA_INICIO = datetime(2023, 1, 1)
+df_original["Date"] = pd.to_datetime(df_original["Date"])
+DATA_INICIO = df_original["Date"].min()
+DATA_FIM    = df_original["Date"].max()
+
 novos_registros = []
-nomes_usados = set(df_original.get("Account Name", pd.Series()).unique())
 
-# Distribui perfis: 30% saver, 45% balanced, 25% debtor
-perfis_lista = (
-    ["saver"]    * int(N_NOVOS_USUARIOS * 0.30) +
-    ["balanced"] * int(N_NOVOS_USUARIOS * 0.45) +
-    ["debtor"]   * int(N_NOVOS_USUARIOS * 0.25)
-)
-# completa se faltar por arredondamento
-while len(perfis_lista) < N_NOVOS_USUARIOS:
-    perfis_lista.append("balanced")
-random.shuffle(perfis_lista)
+for uid in range(1, N_NOVOS_USUARIOS + 1):
 
-for uid in range(N_NOVOS_USUARIOS):
-    perfil_nome = perfis_lista[uid]
-    perfil      = PERFIS[perfil_nome]
+    # formato padronizado USER_0001 a USER_0050
+    user_id = f"USER_{uid:04d}"
 
-    # Nome único para identificar o usuário (vai para Account Name)
-    while True:
-        nome = fake.name()
-        if nome not in nomes_usados:
-            nomes_usados.add(nome)
-            break
+    renda_base = random.uniform(2500, 7000)
 
-    # Renda base aleatória por perfil
-    renda_base = random.uniform(2500, 5500) * perfil["income_mult"]
-
-    # Categorias que este usuário usa (essenciais + extras do perfil + aleatórias)
-    cats_disponiveis = list(CATEGORIAS_NOVAS.keys())
-    cats_usuais = (
+    categorias_disponiveis = list(CATEGORIAS.keys())
+    categorias_usuario = list(set(
         CATS_ESSENCIAIS
-        + perfil["extras"]
-        + random.sample(
-            [c for c in cats_disponiveis if c not in CATS_ESSENCIAIS + perfil["extras"]
-             and CATEGORIAS_NOVAS[c][0] == "debit"],
-            k=min(5, len(cats_disponiveis))
-        )
-    )
-    # Remove categorias que conflitam com o perfil
-    if not perfil["has_loan"]:
-        cats_usuais = [c for c in cats_usuais if c != "Loan Payment"]
-    if not perfil["has_investment"]:
-        cats_usuais = [c for c in cats_usuais if c != "Investment"]
+        + ["Paycheck"]
+        + random.sample(categorias_disponiveis, k=random.randint(8, 15))
+    ))
 
-    # Garante Paycheck (receita)
-    if "Paycheck" not in cats_usuais:
-        cats_usuais.append("Paycheck")
+    datas_mensais = pd.date_range(start=DATA_INICIO, end=DATA_FIM, freq="MS")
 
-    # Gera transações mês a mês
-    for mes_idx in range(MESES_POR_USUARIO):
-        data_ref = DATA_INICIO + timedelta(days=30 * mes_idx)
+    for data_base in datas_mensais:
+        for categoria in categorias_usuario:
 
-        # Tendência: debtors ficam piores ao longo do tempo
-        fator_tendencia = 1.0
-        if perfil_nome == "debtor":
-            fator_tendencia = 1 + (0.008 * mes_idx)
-        elif perfil_nome == "saver":
-            fator_tendencia = 1 - (0.002 * mes_idx)
+            tipo, media, desvio, conta = CATEGORIAS[categoria]
 
-        for cat in cats_usuais:
-            if cat not in CATEGORIAS_NOVAS:
-                continue
-
-            tipo, val_medio, desvio, account = CATEGORIAS_NOVAS[cat]
-
-            # Ajusta valor conforme renda e perfil
-            if tipo == "credit":
-                valor = round(abs(np.random.normal(
-                    renda_base if cat == "Paycheck" else val_medio,
-                    renda_base * 0.03 if cat == "Paycheck" else desvio
-                )), 2)
+            # frequência de transações por categoria
+            if categoria == "Travel":
+                qtd = random.randint(1, 3) if data_base.month in [6, 7, 12] else random.randint(0, 1)
+            elif categoria in ["Paycheck", "Rent", "Utilities", "Internet Bill",
+                               "Phone Bill", "Insurance", "Loan Payment"]:
+                qtd = 1
+            elif categoria in ["Groceries", "Restaurants", "Shopping", "Gas & Fuel"]:
+                qtd = random.randint(2, 8)
             else:
-                valor = round(abs(np.random.normal(
-                    val_medio * perfil["spend_mult"] * fator_tendencia,
-                    desvio * 0.5
-                )), 2)
-                valor = max(1.0, valor)
+                qtd = random.randint(1, 3)
 
-            # Sazonalidade: Shopping e Entertainment sobem no fim do ano
-            if cat in ("Shopping", "Entertainment", "Gifts") and data_ref.month in (11, 12):
-                valor = round(valor * 1.35, 2)
+            for _ in range(qtd):
+                # dia da transação conforme categoria
+                if categoria == "Paycheck":
+                    dia = random.randint(1, 5)
+                elif categoria in ["Rent", "Utilities", "Internet Bill",
+                                   "Phone Bill", "Insurance", "Loan Payment"]:
+                    dia = random.randint(3, 10)
+                elif categoria in ["Groceries", "Restaurants", "Gas & Fuel", "Shopping"]:
+                    dia = random.randint(1, 28)
+                elif categoria in ["Entertainment", "Travel", "Rideshare"]:
+                    dia = random.randint(10, 28)
+                else:
+                    dia = random.randint(1, 28)
 
-            # Freelance e Bonus: nem todo mês
-            if cat == "Freelance Income" and random.random() > 0.40:
-                continue
-            if cat == "Bonus" and random.random() > 0.15:
-                continue
+                data_transacao = datetime(
+                    data_base.year, data_base.month, min(dia, 28)
+                )
 
-            # Data aleatória dentro do mês
-            dia = random.randint(1, 28)
-            data_transacao = (data_ref + timedelta(days=dia)).strftime("%-m/%-d/%Y")
+                valor = max(5, round(np.random.normal(media, desvio), 2))
 
-            novos_registros.append({
-                "Date"            : data_transacao,
-                "Description"     : fake.company()[:40],
-                "Amount"          : valor,
-                "Transaction Type": tipo,
-                "Category"        : cat,
-                "Account Name"    : account,
-                # Coluna extra: identifica o usuário (útil para análise por perfil)
-                "User_ID"         : f"SYN_{uid+1:04d}",
-                "User_Profile"    : perfil_nome,
-            })
+                if categoria == "Paycheck":
+                    valor = round(renda_base, 2)
+                if categoria == "Gifts" and data_base.month == 12:
+                    valor *= 2
+
+                novos_registros.append({
+                    "User_ID"          : user_id,
+                    "Date"             : data_transacao.strftime("%Y-%m-%d"),
+                    "Description"      : fake.company(),
+                    "Category"         : categoria,
+                    "Amount"           : valor,
+                    "Transaction Type" : tipo,
+                    "Account Name"     : conta,
+                })
+
+# ─────────────────────────────────────────────
+# PASSO 5 — ATRIBUIR ID AO USUÁRIO ORIGINAL
+# ─────────────────────────────────────────────
+
+# O usuário original do Kaggle recebe o último ID (USER_0051)
+if "User_ID" not in df_original.columns:
+    df_original["User_ID"] = "USER_0051"
+else:
+    df_original["User_ID"] = "USER_0051"
+
+# ─────────────────────────────────────────────
+# PASSO 6 — CONCATENAÇÃO E EXPORTAÇÃO
+# ─────────────────────────────────────────────
 
 df_novos = pd.DataFrame(novos_registros)
-print(f"    Novos registros gerados: {len(df_novos):,}")
-
-# ─────────────────────────────────────────────
-# PASSO 5 — ADICIONAR User_ID E User_Profile AO DATASET ORIGINAL
-# Usuário original recebe ID "ORIG_0001" e perfil "unknown"
-# ─────────────────────────────────────────────
-
-df_original["User_ID"]      = "ORIG_0001"
-df_original["User_Profile"] = "unknown"
-
-# ─────────────────────────────────────────────
-# PASSO 6 — CONCATENAÇÃO
-# ─────────────────────────────────────────────
 
 df_final = pd.concat([df_original, df_novos], ignore_index=True)
 
 print(f"\n[4] Concatenação concluída")
-print(f"    Registros originais  : {len(df_original):,}")
-print(f"    Registros sintéticos : {len(df_novos):,}")
-print(f"    TOTAL ENRIQUECIDO    : {len(df_final):,}")
+print(f"    Registros originais  : {len(df_original):,}  (USER_0051)")
+print(f"    Registros sintéticos : {len(df_novos):,}  (USER_0001 a USER_0050)")
+print(f"    TOTAL                : {len(df_final):,}")
 
-# ─────────────────────────────────────────────
-# PASSO 7 — SALVAR
-# ─────────────────────────────────────────────
+# reorganizar colunas
+colunas = ["User_ID"] + [c for c in df_final.columns if c != "User_ID"]
+df_final = df_final[colunas].sort_values(["Date", "User_ID"]).reset_index(drop=True)
 
 df_final.to_csv(OUTPUT_FILE, index=False, encoding="utf-8-sig")
 
 print(f"\n[5] Arquivo salvo: {OUTPUT_FILE}")
-print(f"\n    Colunas do dataset enriquecido:")
+print(f"\n    Usuários únicos: {df_final['User_ID'].nunique()}")
+print(f"    Range: {df_final['User_ID'].min()} → {df_final['User_ID'].max()}")
+print(f"\n    Colunas:")
 for col in df_final.columns:
-    nulls = df_final[col].isnull().sum()
-    print(f"      {col:<20} | dtype: {str(df_final[col].dtype):<10} | nulos: {nulls}")
-
-print(f"\n    Categorias no dataset enriquecido ({df_final['Category'].nunique()} únicas):")
-for cat in sorted(df_final["Category"].unique()):
-    n = (df_final["Category"] == cat).sum()
-    print(f"      {cat:<25} → {n:>5} registros")
-
-print(f"\n    Distribuição por perfil:")
-for perfil, count in df_final["User_Profile"].value_counts().items():
-    print(f"      {perfil:<10} → {count:>6} registros")
+    print(f"      {col:<22} | dtype: {str(df_final[col].dtype):<10} | nulos: {df_final[col].isnull().sum()}")
 
 print("\n" + "=" * 60)
-print("  PRÓXIMO PASSO: tratamento e análise exploratória")
-print("  Arquivo pronto:", OUTPUT_FILE)
+print("  PRÓXIMO PASSO: notebooks/01_eda_exploratoria.ipynb")
+print("  Arquivo gerado:", OUTPUT_FILE)
 print("=" * 60)
-
