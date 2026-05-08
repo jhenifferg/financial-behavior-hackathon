@@ -66,7 +66,7 @@ financial-behavior-intelligence/
 │   └── utils.py                       # Funções utilitárias reutilizáveis
 │
 ├── powerbi/
-│   └── painel_diretoria.pbix          # Dashboard Power BI ⬅ ADD
+│   └── painel.pbix                    # Dashboard Power BI 
 │
 ├── docs/
 │   ├── arquitetura_solucao.md         # Detalhamento da arquitetura
